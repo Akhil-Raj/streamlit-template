@@ -246,15 +246,12 @@ Resources:
       LoadBalancerArn: !Ref 'ApplicationLoadBalancer'
       Port: 80
       Protocol: 'HTTP'
-      DefaultActions:
-        - Type: 'redirect'
-          RedirectConfig:
-            Host: '#{host}'
-            Path: '/#{path}'
-            Port: '443'
-            Protocol: 'HTTPS'
-            Query: '#{query}'
-            StatusCode: 'HTTP_301'
+      DefaultActions: # Modified
+        - Type: 'fixed-response'
+          FixedResponseConfig:
+            ContentType: 'application/json'
+            MessageBody: '{"Error":"Not Found"}'
+            StatusCode: '404'
   
   # ApplicationLoadBalancerHttpsListener:
   #   Type: 'AWS::ElasticLoadBalancingV2::Listener'
@@ -497,33 +494,15 @@ Resources:
   StreamlitAlbListenerRule:
     Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
     Properties:
-      ListenerArn: !Ref 'ApplicationLoadBalancerHttpsListener'
-      Priority: 100
-      Actions:
-        - Order: 50
-          Type: 'authenticate-oidc'
-          AuthenticateOidcConfig:
-            AuthorizationEndpoint: !Ref 'OidcAuthorizationEndpoint'
-            ClientId: !Ref 'OidcClientId'
-            ClientSecret: !Sub '{{resolve:ssm:/oidc-client-secret/${OidcClientId}}}'
-            Issuer: !Ref 'OidcIssuer'
-            OnUnauthenticatedRequest: 'authenticate'
-            Scope: 'openid'
-            SessionCookieName: !Sub '${Application}-${Environment}-oidc-session'
-            SessionTimeout: 86400
-            TokenEndpoint: !Ref 'OidcTokenEndpoint'
-            UserInfoEndpoint: !Ref 'OidcUserInfoEndpoint'
-        - Order: 100
-          Type: 'forward'
+      ListenerArn: !Ref 'ApplicationLoadBalancerHttpListener' # Changed
+      Priority: 100 # You can adjust priority if you add more rules later
+      Actions: # Modified
+        - Type: 'forward'
           TargetGroupArn: !Ref 'StreamlitAlbTargetGroup'
-      Conditions:
-        - Field: 'host-header'
-          HostHeaderConfig:
-            Values:
-              - !If
-                - 'IsMainBranch'
-                - !Sub '${SubDomainName}.${RootDomainName}'
-                - !Sub '${SubDomainName}-${Environment}.${RootDomainName}'
+      Conditions: # Modified
+        - Field: 'path-pattern'
+          PathPatternConfig:
+            Values: ['/*'] # Matches all paths
 
   StreamlitServiceTaskDefinition:
     Type: 'AWS::ECS::TaskDefinition'
